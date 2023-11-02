@@ -76,6 +76,7 @@ contract SimpleDEX {
         if (reserveA > 0 || reserveB > 0) {
             require(
                 reserveA * _amountB == reserveB * _amountA,
+                "x / y != dx / dy"
             );
         }
         if (totalSupply == 0) {
