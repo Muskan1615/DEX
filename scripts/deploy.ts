@@ -19,6 +19,15 @@ async function main() {
   const dex = await DEX.deploy(tokenA.getAddress(), tokenB.getAddress());
   dex.waitForDeployment;
   console.log("DEX deployed to:", await dex.getAddress());
+
+  // Get the balance of TokenA in your wallet
+  const balanceA = await tokenA.balanceOf(wallet.address);
+
+  // Get the balance of TokenB in your wallet
+  const balanceB = await tokenB.balanceOf(wallet.address);
+
+  console.log(`TokenA Balance: ${balanceA.toString()}`);
+  console.log(`TokenB Balance: ${balanceB.toString()}`);
 }
 
 main()
