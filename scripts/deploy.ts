@@ -1,3 +1,4 @@
+import { AddressLike } from "ethers";
 import { ethers } from "hardhat";
 
 async function main() {
@@ -18,16 +19,47 @@ async function main() {
   const DEX = await ethers.getContractFactory("SimpleDEX");
   const dex = await DEX.deploy(tokenA.getAddress(), tokenB.getAddress());
   dex.waitForDeployment;
-  console.log("DEX deployed to:", await dex.getAddress());
+  const dexAddr = await dex.getAddress();
+  console.log("DEX deployed to:", dexAddr);
 
   // Get the balance of TokenA in your wallet
-  const balanceA = await tokenA.balanceOf(wallet.address);
+  let balanceA = await tokenA.balanceOf(wallet.address);
 
   // Get the balance of TokenB in your wallet
-  const balanceB = await tokenB.balanceOf(wallet.address);
+  let balanceB = await tokenB.balanceOf(wallet.address);
 
   console.log(`TokenA Balance: ${balanceA.toString()}`);
   console.log(`TokenB Balance: ${balanceB.toString()}`);
+
+  await tokenA.mint(wallet.address, ethers.parseEther("200"));
+  await tokenB.mint(wallet.address, ethers.parseEther("200"));
+  balanceA = await tokenA.balanceOf(wallet.address);
+
+  // Get the balance of TokenB in your wallet
+  balanceB = await tokenB.balanceOf(wallet.address);
+
+  console.log(`TokenA Balance: ${balanceA.toString()}`);
+  console.log(`TokenB Balance: ${balanceB.toString()}`);
+
+  await tokenA.approve(dexAddr, ethers.parseEther("1000"));
+  await tokenB.approve(dexAddr, ethers.parseEther("1000"));
+
+  await dex.addLiquidity(ethers.parseEther("100"), ethers.parseEther("100"));
+
+  console.log(`ReserveA: `, dex.reserveA);
+  console.log(`ReserveB: `, dex.reserveB);
+
+  console.log("Swapping");
+  await dex.swap(await tokenA.getAddress(), ethers.parseEther("10"));
+
+  balanceA = await tokenA.balanceOf(wallet.address);
+
+  // Get the balance of TokenB in your wallet
+  balanceB = await tokenB.balanceOf(wallet.address);
+
+  console.log(`TokenA Balance: ${balanceA.toString()}`);
+  console.log(`TokenB Balance: ${balanceB.toString()}`);
+
 }
 
 main()
