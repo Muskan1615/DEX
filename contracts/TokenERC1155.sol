@@ -7,7 +7,7 @@ contract TokenERC1155 is ERC1155 {
     uint256 public constant GOLD = 1;
     uint256 public constant NFT = 2;
 
-    constructor() ERC1155("SemiFungible") {}
+    constructor() ERC1155("TokenERC1155") {}
 
     function mint(
         address to,
@@ -16,5 +16,13 @@ contract TokenERC1155 is ERC1155 {
         bytes memory data
     ) public {
         _mint(to, id, amount, data);
+    }
+
+    function mintBatch(
+        uint256[] calldata ids,
+        uint256[] calldata values,
+        bytes calldata data
+    ) public {
+        _mintBatch(msg.sender, ids, values, data);
     }
 }

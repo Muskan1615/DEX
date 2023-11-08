@@ -7,13 +7,11 @@ import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 
 contract ERC1155DEX is ERC1155Holder {
     IERC1155 public erc1155Token;
-    uint256 public constant GOLD = 1;
-    uint256 public constant NFT = 2;
-    uint256 public reserveGOLD;
-    uint256 public reserveNFT;
-    uint256 public totalSupply;
+    uint256[] public totalIds;
 
     mapping(address => uint) public balanceOf;
+    mapping(uint => uint) public reserves;
+    uint256 totalSupply;
 
     constructor(address _erc1155Address) {
         erc1155Token = IERC1155(_erc1155Address);
@@ -24,113 +22,118 @@ contract ERC1155DEX is ERC1155Holder {
         totalSupply += _amount;
     }
 
-    function _burn(address _from, uint _amount) private {
-        balanceOf[_from] -= _amount;
-        totalSupply -= _amount;
+    function _update(uint256[] memory _tokenIds) private {
+        for (uint i = 0; i < _tokenIds.length; i++) {
+            reserves[_tokenIds[i]] = erc1155Token.balanceOf(
+                address(this),
+                _tokenIds[i]
+            );
+        }
     }
 
-    function _update(uint _reserveGOLD, uint _reserveNFT) private {
-        reserveGOLD = _reserveGOLD;
-        reserveNFT = _reserveNFT;
+    function _updateNew(
+        uint _idONE,
+        uint _reserveONE,
+        uint _idTWO,
+        uint _reserveTWO
+    ) private {
+        reserves[_idONE] = _reserveONE;
+        reserves[_idTWO] = _reserveTWO;
     }
 
-    function swap(uint256 _idIn, uint256 _amountIn) external {
-        require(_idIn == GOLD || _idIn == NFT, "Invalid token");
+    function checkIds(uint _id) public view returns (bool) {
+        for (uint i = 0; i < totalIds.length; i++) {
+            if (totalIds[i] == _id) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function swap(uint256 _idIn, uint256 _amountIn, uint256 _idOut) external {
+        require(checkIds(_idIn), "Invalid Id In");
+        require(checkIds(_idOut), "Invalid Id Out");
         require(_amountIn > 0, "Amount in = 0");
 
-        uint256[] memory ids = new uint256[](1);
-        uint256[] memory amounts = new uint256[](1);
-
-        ids[0] = _idIn;
-        amounts[0] = _amountIn;
-
-        erc1155Token.safeBatchTransferFrom(
+        erc1155Token.safeTransferFrom(
             msg.sender,
             address(this),
-            ids,
-            amounts,
+            _idIn,
+            _amountIn,
             ""
         );
 
         uint256 amountInWithFee = (_amountIn * 997) / 1000;
+        uint256 amountOut = (reserves[_idOut] * amountInWithFee) /
+            (reserves[_idIn] + amountInWithFee);
 
-        if (_idIn == GOLD) {
-            uint256 amountOut = (reserveNFT * amountInWithFee) /
-                (reserveGOLD + amountInWithFee);
-            erc1155Token.safeTransferFrom(
-                address(this),
-                msg.sender,
-                NFT,
-                amountOut,
-                ""
-            );
-            _update(
-                erc1155Token.balanceOf(address(this), GOLD),
-                erc1155Token.balanceOf(address(this), NFT)
-            );
-        } else {
-            uint256 amountOut = (reserveGOLD * amountInWithFee) /
-                (reserveNFT + amountInWithFee);
-            erc1155Token.safeTransferFrom(
-                address(this),
-                msg.sender,
-                GOLD,
-                amountOut,
-                ""
-            );
-            _update(
-                erc1155Token.balanceOf(address(this), NFT),
-                erc1155Token.balanceOf(address(this), GOLD)
-            );
-        }
+        erc1155Token.safeTransferFrom(
+            address(this),
+            msg.sender,
+            _idOut,
+            amountOut,
+            ""
+        );
+        _updateNew(
+            _idIn,
+            erc1155Token.balanceOf(address(this), _idIn),
+            _idOut,
+            erc1155Token.balanceOf(address(this), _idOut)
+        );
     }
 
     function addLiquidity(
-        uint256 _idGOLD,
-        uint256 _idNFT,
-        uint256 _amountGOLD,
-        uint256 _amountNFT
+        uint256[] memory _ids,
+        uint256[] memory _amounts
     ) external {
-        require(_amountGOLD > 0 && _amountNFT > 0, "Invalid amounts");
+        require(_ids.length == _amounts.length, "Invalid input lengths");
+        for (uint i = 0; i < _ids.length; i++) {
+            if (!checkIds(_ids[i])) {
+                totalIds.push(_ids[i]);
+            }
+        }
 
-        uint256[] memory ids = new uint256[](2);
-        uint256[] memory amounts = new uint256[](2);
-
-        ids[0] = _idGOLD;
-        amounts[0] = _amountGOLD;
-        ids[1] = _idNFT;
-        amounts[1] = _amountNFT;
-
-        erc1155Token.safeBatchTransferFrom(
-            msg.sender,
-            address(this),
-            ids,
-            amounts,
-            ""
-        );
-
-        if (reserveGOLD > 0 || reserveNFT > 0) {
-            require(
-                reserveGOLD * _amountNFT == reserveNFT * _amountGOLD,
-                "x / y != dx / dy"
+        for (uint i = 0; i < _ids.length; i++) {
+            erc1155Token.safeTransferFrom(
+                msg.sender,
+                address(this),
+                _ids[i],
+                _amounts[i],
+                ""
             );
         }
 
-        if (totalSupply == 0) {
-            uint shares = _sqrt(_amountGOLD * _amountNFT);
-            _mint(msg.sender, shares);
-        } else {
-            uint sharesGOLD = (_amountGOLD * totalSupply) / reserveGOLD;
-            uint sharesNFT = (_amountNFT * totalSupply) / reserveNFT;
-            uint shares = _min(sharesGOLD, sharesNFT);
-            require(shares > 0, "Shares = 0");
-            _mint(msg.sender, shares);
+        uint256 totalAmount = 0;
+        for (uint i = 0; i < _ids.length; i++) {
+            require(_amounts[i] > 0, "Invalid amounts");
+            totalAmount += _amounts[i];
         }
 
-        _update(
-            erc1155Token.balanceOf(address(this), _idGOLD),
-            erc1155Token.balanceOf(address(this), _idNFT)
-        );
+        if (totalSupply > 0) {
+            for (uint i = 0; i < _ids.length; i++) {
+                require(
+                    reserves[_ids[i]] * totalAmount ==
+                        reserves[1 - _ids[i]] * _amounts[i],
+                    "x / y != dx / dy"
+                );
+            }
+        }
+
+        uint shares = 1;
+        if (totalSupply > 0) {
+            for (uint i = 0; i < _ids.length; i++) {
+                uint sharesToken = (_amounts[i] * totalSupply) /
+                    reserves[_ids[i]];
+                shares = (shares < sharesToken) ? shares : sharesToken;
+            }
+        } else {
+            for (uint i = 0; i < _ids.length; i++) {
+                shares *= _amounts[i];
+            }
+            shares = _sqrt(shares);
+        }
+
+        _update(_ids);
     }
 
     function _sqrt(uint y) private pure returns (uint z) {
