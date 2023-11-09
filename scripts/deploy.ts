@@ -137,9 +137,19 @@ async function main() {
   console.log(`Reserve 3: ${Number(await erc1155DEX.reserves(3))}`);
   console.log(`Reserve 4: ${Number(await erc1155DEX.reserves(4))}`);
 
-  console.log("Swapping ERC1155 Tokens:");
+  console.log("ERC1155 Balances After Adding Liquidity:");
 
-  await erc1155DEX.swap(1, 5, 2);
+  balances = await tokenERC1155.balanceOfBatch(
+    [wallet.address, wallet.address, wallet.address, wallet.address],
+    [1, 2, 3, 4]
+  );
+  balances.forEach((balance, index) => {
+    console.log(`Token ${index + 1}: ${Number(balance)}`);
+  });
+
+  console.log("Swapping 10 Tokens From ID 1 To ID 2:");
+
+  await erc1155DEX.swap(1, 10, 2);
 
   console.log("ERC1155 Balances After Swapping:");
 
